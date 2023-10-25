@@ -1,0 +1,35 @@
+{
+  "WindowSize": [512, 512],
+
+  "Detector": {
+    "Position": [0.0, 0.0, 0.0, "mm"],
+    "UpVector": [0, -1, 0],
+    "NumberOfPixels": [640, 480],
+    "Spacing": [0.23, 0.23, "mm"]
+  },
+
+  "Source": {
+    "Position": [0.0,  0.0, 0.0, "mm"],
+    "Shape": "PointSource",
+    "Beam": [
+      {
+        "Energy": 85.16831503678492,
+        "Unit": "keV",
+        "PhotonCount": 1
+      }
+    ]
+  },
+
+
+  "Samples": [
+    "MoveToCenter",
+
+    {
+      "Label": "Rabbit",
+      "Path": "Rabbit.stl",
+      "Unit": "mm",
+      "Material": ["Compound", "C5O2H8"],
+      "Density": 1.18
+    }
+  ]
+}
