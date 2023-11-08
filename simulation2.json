@@ -1,5 +1,5 @@
 {
-  "WindowSize": [512, 512],
+  "WindowSize": [800, 600],
 
   "Detector": {
     "Position": [0.0, 0.0, 0.0, "mm"],
@@ -22,8 +22,6 @@
 
 
   "Samples": [
-    "MoveToCenter",
-
     {
       "Label": "Rabbit",
       "Path": "Rabbit.stl",

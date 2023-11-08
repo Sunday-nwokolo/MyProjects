@@ -89,25 +89,40 @@ def getReference(I_flat, angles_in_deg, number_of_angles):
 
     images = []
     angles = []
+    indices = []
     
     for i in range(number_of_angles):
 
         if number_of_angles == 1:
             index = 0
         else:
-            index = round((i + 1) / number_of_angles * (len(angles_in_deg) // 4))
+            index = round((i + 1) / number_of_angles * (len(angles_in_deg) // 2))
         
         images.append(I_flat[index])
         angles.append(angles_in_deg[index])
+        indices.append(index)
 
-    return np.array(images), np.array(angles)
+    return np.array(images), np.array(angles), np.array(indices)
 
 def getXrayImage(x, take_screenshot=False):
 
     global screenshot
     screenshot = []
 
-    backup = gvxr.getLocalTransformationMatrix("root")
+    identity_matrix = [
+        1, 0, 0, 0,
+        0, 1, 0, 0,
+        0, 0, 1, 0,
+        0, 0, 0, 1
+    ]
+    
+#     # Reset transformations
+#     gvxr.setLocalTransformationMatrix("root", identity_matrix)
+
+#     for i in range(gvxr.getNumberOfChildren("root")):
+#         label = gvxr.getChildLabel("root", i);
+#         gvxr.setLocalTransformationMatrix(label, identity_matrix)
+
 
     # Move source, det, object using x
     x_src = x[0]
@@ -120,51 +135,45 @@ def getXrayImage(x, take_screenshot=False):
     z_det = x[5]
     gvxr.setDetectorPosition(x_det, y_det, z_det, "mm")
 
-    x_obj1 = x[6]
-    y_obj1 = x[7]
-    z_obj1 = x[8]
+    x_rot_axis_pos = x[6]
+    y_rot_axis_pos = x[7]
+    z_rot_axis_pos = x[8]
 
     alpha_x = x[9]
     alpha_y = x[10]
     alpha_z = x[11]
 
-    x_obj2 = x[12]
-    y_obj2 = x[13]
-    z_obj2 = x[14]
+    x_obj = x[12]
+    y_obj = x[13]
+    z_obj = x[14]
 
     test_image = []
 
     up_vector = gvxr.getDetectorUpVector();
     
+    # Position the object on the turn table
+    for i in range(gvxr.getNumberOfChildren("root")):
+        label = gvxr.getChildLabel("root", i);
+        gvxr.setLocalTransformationMatrix(label, identity_matrix)
+        gvxr.translateNode(label, x_obj, y_obj, z_obj, "mm")  #4
+        gvxr.rotateNode(label, alpha_x, 1, 0, 0)  #3
+        gvxr.rotateNode(label, alpha_y, 0, 1, 0)  #2
+        gvxr.rotateNode(label, alpha_z, 0, 0, 1)  #1
+    
     for rot_angle in selected_angles:
-        gvxr.resetSceneTransformation();
     
-        
-        
-        
-    #     gvxr.translateNode("root", x_rot_axis_pos, y_rot_axis_pos, z_rot_axis_pos, "mm")
-    
-        
-        gvxr.rotateNode("root", rot_angle, up_vector[0], up_vector[1], up_vector[2])
-        
-        gvxr.translateNode("root", x_obj1, y_obj1, z_obj1, "mm")
-        
-        gvxr.rotateNode("root", alpha_x, 1, 0, 0)
-        gvxr.rotateNode("root", alpha_y, 0, 1, 0)
-        gvxr.rotateNode("root", alpha_z, 0, 0, 1)
-        
-        gvxr.translateNode("root", -x_obj2, -y_obj2, -z_obj2, "mm")
-        
+        # Centre of rotation
+        gvxr.setLocalTransformationMatrix("root", identity_matrix)
+        gvxr.translateNode("root", x_rot_axis_pos, y_rot_axis_pos, z_rot_axis_pos, "mm") #6
+        gvxr.rotateNode("root", rot_angle, up_vector[0], up_vector[1], up_vector[2]) #5
+                
+
         test_image.append(gvxr.computeXRayImage())
     
         if take_screenshot:
 
             gvxr.displayScene()        
             screenshot.append(gvxr.takeScreenshot())
-        
-        gvxr.setLocalTransformationMatrix("root", backup)
-
-        
     
     return np.array(test_image, dtype=np.single) / gvxr.getTotalEnergyWithDetectorResponse()
 
@@ -233,8 +242,7 @@ def displayResult(x, figsize=(15, 4)):
         axs[index][1].imshow(ref_image[index], cmap="gray", vmin=0, vmax=1)
         axs[index][2].imshow(test_image[index], cmap="gray", vmin=0, vmax=1)
         im = axs[index][3].imshow((ref_image[index] - test_image[index]), cmap="gray", vmin=-1, vmax=1)
-        axs[index][0].set_title("Rotation angle: " + str(selected_angles[index]) + "$^\circ$")
-
+        axs[index][0].set_title("Image: " + str(indices[index]) + " Rotation angle: "  + str(selected_angles[index]) + "$^\circ$")
 
 #    im = axs[3].imshow((I_flat - test_image),cmap="gray", vmin=-1, vmax=1)
     # cbar = fig.colorbar(im)
