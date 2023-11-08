@@ -22,6 +22,8 @@ from gvxrPython3 import gvxr
 # from gvxrPython3.utils import loadSpekpySpectrum # Generate and load an X-ray spectrum using Spekpy
 # from gvxrPython3.utils import loadXpecgenSpectrum # Generate and load an X-ray spectrum using xpecgen
 
+use_padding = True
+pad_width = 50
 
 
 
