@@ -19,10 +19,11 @@ dependencies:
     - vtk
     - cma
     - SimpleITK
-    - cil=22.2.0
-    - tigre=2.2
+    - cil=23.1.0
+    - tigre
     - astra-toolbox
     - opencv
     - k3d
+    - natsort
     - pip:
-        - gvxr>=2.0.7
+        - gvxr>=2.0.8
