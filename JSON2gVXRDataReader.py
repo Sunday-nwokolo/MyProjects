@@ -8,7 +8,20 @@ from cil.framework import AcquisitionGeometry, AcquisitionData
 # from gvxrPython3 import gvxr
 # from gvxrPython3 import json2gvxr
 
+def distancePointLine(point, line) -> float:
 
+    A = point
+    B = line[0]
+    C = line[1]
+    
+    d = (C - B) / np.linalg.norm(C - B)
+    v = A - B;
+    
+    t = np.dot(v, d);
+    P = B + t * d;
+    return np.linalg.norm(P - A);
+    
+    
 def getUnitOfLength(aUnitOfLength: str) -> float:
 
     unit_of_length = 0.0;
@@ -86,7 +99,7 @@ class JSON2gVXRDataReader:
             temp_rotation_axis_position = np.array(temp_rotation_axis_position[0:3]) * getUnitOfLength(temp_rotation_axis_position[3]) / getUnitOfLength("mm")
         temp_rotation_axis_position[2] *= -1
         # temp_rotation_axis_position += ???
-        temp_rotation_axis_position[1] = (181.75211882974276 +  36.786910286694045) / 2
+        temp_rotation_axis_position[1] = (181.75211882974276 +  36.786910286694045) / 2 - 15
         rotation_axis_position = temp_rotation_axis_position #[0, 0, 0]
         
 
@@ -165,7 +178,9 @@ class JSON2gVXRDataReader:
 
         detector_direction_x = np.cross(ray_direction, rotation_axis_direction)
         detector_direction_y = rotation_axis_direction
-
+    
+        print("distance:", distancePointLine(rotation_axis_position, [source_position_mm, detector_position_mm]))
+        
         # Parallel beam
         if use_parallel_beam:
             acquisition_geometry = AcquisitionGeometry.create_Parallel3D(ray_direction,
@@ -173,7 +188,8 @@ class JSON2gVXRDataReader:
                 detector_direction_x=detector_direction_x,
                 detector_direction_y=detector_direction_y,
                 rotation_axis_position=rotation_axis_position,
-                rotation_axis_direction=rotation_axis_direction)
+                rotation_axis_direction=rotation_axis_direction,
+                units="mm")
             print(ray_direction)
             print(detector_position_mm)
             print(rotation_axis_position)
@@ -185,7 +201,8 @@ class JSON2gVXRDataReader:
                 detector_direction_x=detector_direction_x,
                 detector_direction_y=detector_direction_y,
                 rotation_axis_position=rotation_axis_position,
-                rotation_axis_direction=rotation_axis_direction)
+                rotation_axis_direction=rotation_axis_direction,
+                units="mm")
 
         acquisition_geometry.set_angles(angle_set)
         acquisition_geometry.set_panel(detector_number_of_pixels, pixel_spacing_mm)
