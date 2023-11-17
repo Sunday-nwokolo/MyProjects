@@ -99,7 +99,7 @@ class JSON2gVXRDataReader:
             temp_rotation_axis_position = np.array(temp_rotation_axis_position[0:3]) * getUnitOfLength(temp_rotation_axis_position[3]) / getUnitOfLength("mm")
         temp_rotation_axis_position[2] *= -1
         # temp_rotation_axis_position += ???
-        temp_rotation_axis_position[1] = (181.75211882974276 +  36.786910286694045) / 2 - 15
+        # temp_rotation_axis_position[1] = (181.75211882974276 +  36.786910286694045) / 2 - 15
         rotation_axis_position = temp_rotation_axis_position #[0, 0, 0]
         
 

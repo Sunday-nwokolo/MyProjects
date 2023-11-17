@@ -24,8 +24,8 @@ from gvxrPython3 import gvxr
 
 use_padding = True
 pad_width = 50
-
-
+bbox = None
+plot_directory = "."
 
 def average_images(image_paths):
     
@@ -139,13 +139,15 @@ def getXrayImage(x, take_screenshot=False):
     y_rot_axis_pos = x[7]
     z_rot_axis_pos = x[8]
 
-    alpha_x = x[9]
-    alpha_y = x[10]
-    alpha_z = x[11]
+    x_obj = x[9]
+    y_obj = x[10]
+    z_obj = x[11]
+    
+    if len(x) == 15:
+        alpha_x = x[12]
+        alpha_y = x[13]
+        alpha_z = x[14]
 
-    x_obj = x[12]
-    y_obj = x[13]
-    z_obj = x[14]
 
     test_image = []
 
@@ -156,15 +158,20 @@ def getXrayImage(x, take_screenshot=False):
         label = gvxr.getChildLabel("root", i);
         gvxr.setLocalTransformationMatrix(label, identity_matrix)
         gvxr.translateNode(label, x_obj, y_obj, z_obj, "mm")  #4
-        gvxr.rotateNode(label, alpha_x, 1, 0, 0)  #3
-        gvxr.rotateNode(label, alpha_y, 0, 1, 0)  #2
-        gvxr.rotateNode(label, alpha_z, 0, 0, 1)  #1
+        
+        if len(x) == 15:
+            gvxr.rotateNode(label, alpha_x, 1, 0, 0)  #3
+            gvxr.rotateNode(label, alpha_y, 0, 1, 0)  #2
+            gvxr.rotateNode(label, alpha_z, 0, 0, 1)  #1
     
     for rot_angle in selected_angles:
     
         # Centre of rotation
         gvxr.setLocalTransformationMatrix("root", identity_matrix)
         gvxr.translateNode("root", x_rot_axis_pos, y_rot_axis_pos, z_rot_axis_pos, "mm") #6
+        
+        bbox = gvxr.getNodeAndChildrenBoundingBox("Rabbit", "mm")
+
         gvxr.rotateNode("root", rot_angle, up_vector[0], up_vector[1], up_vector[2]) #5
                 
 
@@ -175,7 +182,7 @@ def getXrayImage(x, take_screenshot=False):
             gvxr.displayScene()        
             screenshot.append(gvxr.takeScreenshot())
     
-    return np.array(test_image, dtype=np.single) / gvxr.getTotalEnergyWithDetectorResponse()
+    return np.array(test_image, dtype=np.single) / gvxr.getTotalEnergyWithDetectorResponse(), bbox
 
 def compareMAE(ref, test):
     return np.abs(ref - test).mean()
@@ -185,9 +192,9 @@ def compareMSE(ref, test):
 
 
 def fitnessMAE(x):
-    global ref_image, best_fitness, fitness_set, counter
+    global ref_image, best_fitness, fitness_set, counter, bbox
 
-    test_image = getXrayImage(x)
+    test_image, bbox = getXrayImage(x)
     fitness_value = compareMAE(ref_image, test_image)
 
     if best_fitness > fitness_value:
@@ -199,22 +206,25 @@ def fitnessMAE(x):
     return fitness_value
 
 def fitnessMSE(x):
-    global ref_image, best_fitness, fitness_set, counter
+    global ref_image, best_fitness, fitness_set, counter, bbox
 
-    test_image = getXrayImage(x)
+    test_image, bbox = getXrayImage(x)
     fitness_value = compareMSE(ref_image, test_image)
     
     if best_fitness > fitness_value:
         fitness_set.append([counter, fitness_value])
         best_fitness = fitness_value
+        displayResult(x)
+        plt.savefig(plot_directory + "/plot_" + str(counter) + ".png")
+        plt.close()
 
     counter += 1
 
     return fitness_value
 
 def displayResult(x, figsize=(15, 4)):
-    global screenshot
-    test_image = getXrayImage(x, True)
+    global screenshot, bbox
+    test_image, bbox = getXrayImage(x, True)
     
     ref_tmp = np.copy(ref_image)
     test_tmp = np.copy(test_image)
@@ -252,7 +262,6 @@ def displayResult(x, figsize=(15, 4)):
 #         ax.set_ylim([211, 470])
 #    plt.savefig('x_default.jpg', dpi=300, bbox_inches='tight')
 
-    plt.show()    
 
 def displayRef(ref_image):
 

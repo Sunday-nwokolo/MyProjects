@@ -1,0 +1,70 @@
+{
+    "WindowSize": [
+        800,
+        600
+    ],
+    "Detector": {
+        "Position": [
+            42.78401538716627,
+            0.30436635598060213,
+            293.6164094260478,
+            "mm"
+        ],
+        "UpVector": [
+            0.0,
+            -1.0,
+            0.0
+        ],
+        "NumberOfPixels": [
+            640,
+            480
+        ],
+        "Size": [
+            147.1999969482422,
+            110.4000015258789,
+            "mm"
+        ]
+    },
+    "Source": {
+        "Position": [
+            -2.3398655312819843,
+            -16.71624463592916,
+            -43.140895220952466,
+            "mm"
+        ],
+        "Shape": "PointSource",
+        "Beam": [
+            {
+                "Energy": 85.16831696033478,
+                "Unit": "keV",
+                "PhotonCount": 1.0
+            }
+        ]
+    },
+    "Samples": [
+        {
+            "Label": "Rabbit",
+            "Path": "../Rabbit.stl",
+            "Unit": "mm",
+            "Material": [
+                "Compound",
+                "C5O2H8"
+            ],
+            "Density": 1.18
+        }
+    ],
+    "Scan": {
+        "CenterOfRotation": [
+            4.190724232146942,
+            -32.916225409660775,
+            -24.88830026991773,
+            "mm"
+        ],
+        "FinalAngle": 360.0,
+        "IncludeFinalAngle": true,
+        "NumberOfProjections": 101,
+        "GifPath": "preview.gif",
+        "OutFolder": "simulation/",
+        "Flat-Field Correction": true
+    }
+}
