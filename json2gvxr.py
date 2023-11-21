@@ -614,7 +614,7 @@ def initSamples(fname:str="", verbose:int=0):
                     else:
                         raise IOError("Invalid transformation:", transform)
 
-                gvxr.applyCurrentLocalTransformation(mesh["Label"])
+                # gvxr.applyCurrentLocalTransformation(mesh["Label"])
 
             # Add the mesh to the simulation
             if "Type" in mesh.keys():
@@ -831,15 +831,26 @@ def doCTScan(verbose:bool=False):
     if len(scan_params["RotCentre"]) == 4:
         units = scan_params["RotCentre"][3]
     
-    gvxr.translateNode("root", 
-        scan_params["RotCentre"][0],
-        scan_params["RotCentre"][1],
-        scan_params["RotCentre"][2],
-        units)
 
     for i in range(scan_params["NumberOfProjections"]):
+        
         angles.append(i*scan_params["AngleStep"])
 
+
+        gvxr.translateNode("root", 
+            -scan_params["RotCentre"][0],
+            -scan_params["RotCentre"][1],
+            -scan_params["RotCentre"][2],
+            units)
+
+        # Rotate around detector up vector
+        gvxr.rotateNode("root", angles[-1], *params["Detector"]["UpVector"])
+
+        gvxr.translateNode("root", 
+            scan_params["RotCentre"][0],
+            scan_params["RotCentre"][1],
+            scan_params["RotCentre"][2],
+            units)
 
         # Compute an X-ray image
         img = np.array(gvxr.computeXRayImage(), dtype=np.single)
@@ -857,8 +868,7 @@ def doCTScan(verbose:bool=False):
             scrn = (np.asarray(gvxr.takeScreenshot()) * 255).astype("uint8")
             screenshots.append(Image.fromarray(scrn))
 
-        # Rotate around detector up vector
-        gvxr.rotateNode("root", scan_params["AngleStep"], *params["Detector"]["UpVector"])
+        gvxr.setLocalTransformationMatrix("root", backup)
 
     gvxr.setLocalTransformationMatrix("root", backup)
 
