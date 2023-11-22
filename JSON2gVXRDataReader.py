@@ -198,8 +198,8 @@ class JSON2gVXRDataReader:
         else:
             acquisition_geometry = AcquisitionGeometry.create_Cone3D(source_position_mm,
                 detector_position_mm,
-                detector_direction_x=detector_direction_x,
-                detector_direction_y=detector_direction_y,
+                detector_direction_x=-detector_direction_x,
+                detector_direction_y=-detector_direction_y,
                 rotation_axis_position=rotation_axis_position,
                 rotation_axis_direction=rotation_axis_direction,
                 units="mm")

@@ -109,7 +109,8 @@ def getReference(I_flat, angles_in_deg, number_of_angles):
 
 def getXrayImage(x, take_screenshot=False):
 
-    global screenshot
+    global screenshot, default_up_vector, default_right_vector
+
     screenshot = []
 
     identity_matrix = [
@@ -153,8 +154,15 @@ def getXrayImage(x, take_screenshot=False):
 
     test_image = []
 
+    gvxr.setDetectorUpVector(*default_up_vector);
+    gvxr.setDetectorRightVector(*default_right_vector);
+
+    if len(x) == 16:
+        gvxr.rotateDetector(x[14], *default_up_vector)
+        gvxr.rotateDetector(x[15], *default_right_vector)
+        
     up_vector = gvxr.getDetectorUpVector();
-    
+        
     # Position the object on the turn table
     for i in range(gvxr.getNumberOfChildren("root")):
         label = gvxr.getChildLabel("root", i);
@@ -189,10 +197,13 @@ def getXrayImage(x, take_screenshot=False):
             gvxr.displayScene()        
             screenshot.append(gvxr.takeScreenshot())
     
+
     return np.array(test_image, dtype=np.single) / gvxr.getTotalEnergyWithDetectorResponse(), bbox
 
 def applyTransformation(x):
 
+    global default_up_vector, default_right_vector
+    
     identity_matrix = [
         1, 0, 0, 0,
         0, 1, 0, 0,
@@ -223,6 +234,13 @@ def applyTransformation(x):
     alpha_y = x[13]
     # alpha_z = x[14]
 
+    gvxr.setDetectorUpVector(*default_up_vector);
+    gvxr.setDetectorRightVector(*default_right_vector);
+
+    if len(x) == 16:
+        gvxr.rotateDetector(x[14], *default_up_vector)
+        gvxr.rotateDetector(x[15], *default_right_vector)
+        
     up_vector = gvxr.getDetectorUpVector();
 
     # Centre of rotation
@@ -329,6 +347,14 @@ def displayResult(x, figsize=(15, 4)):
     
     ref_tmp = np.copy(ref_image)
     test_tmp = np.copy(test_image)
+
+    MAE = compareMAE(ref_image, test_image);
+    RMSE = math.sqrt(compareMSE(ref_image, test_image));
+    SSIM = 0.0
+    
+    for img1, img2 in zip(ref_image, test_image):
+        SSIM += ssim(img1, img2, data_range=1);
+    SSIM /= ref_image.shape[0]
     
     ref_tmp -= ref_tmp.mean()
     ref_tmp /= ref_tmp.std()
@@ -340,7 +366,10 @@ def displayResult(x, figsize=(15, 4)):
     
     #fig, axs = plt.subplots(len(screenshot), 4, figsize=figsize)
     fig, axs = plt.subplots(len(screenshot), 4, figsize=figsize, squeeze=False)
-    plt.suptitle("Overall ZNCC=" + "{:.4f}".format(ZNCC) + "%")
+    plt.suptitle("Overall ZNCC=" + "{:.4f}".format(ZNCC) + "%\n" +
+                "Overall MAE=" + "{:.4f}".format(MAE) + "\n" +
+                "Overall RMSE=" + "{:.4f}".format(RMSE) + "\n" +
+                "Overall SSIM=" + "{:.4f}".format(SSIM))
 
     for index in range(len(screenshot)):
 #         axs[index][0].imshow(screenshot[index])
