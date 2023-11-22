@@ -359,13 +359,14 @@ def initDetector(fname:str=""):
     print("\tDetector position:", detector_position)
 
     detector_up = params["Detector"]["UpVector"];
-    gvxr.setDetectorUpVector(
-        detector_up[0],
-        detector_up[1],
-        detector_up[2]
-    );
+    gvxr.setDetectorUpVector(*detector_up);
     print("\tDetector up vector:", detector_up)
 
+    if "RightVector" in params["Detector"]:
+        detector_right = params["Detector"]["RightVector"];
+        gvxr.setDetectorRightVector(*detector_right);
+        print("\tDetector right vector:", detector_right)
+    
     detector_number_of_pixels = params["Detector"]["NumberOfPixels"];
     print("\tNumber of pixels:", detector_number_of_pixels)
     gvxr.setDetectorNumberOfPixels(

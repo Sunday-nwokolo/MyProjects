@@ -87,7 +87,7 @@ class JSON2gVXRDataReader:
         # Get the rotation parameters
         rotation_axis_direction = -np.array(gVXR_params["Detector"]["UpVector"])
         rotation_axis_direction[2] *= -1
-
+        
         if "CenterOfRotation" in gVXR_params["Scan"]:
             temp_rotation_axis_position = gVXR_params["Scan"]["CenterOfRotation"]
         elif "CentreOfRotation" in gVXR_params["Scan"]:
@@ -179,6 +179,10 @@ class JSON2gVXRDataReader:
         detector_direction_x = np.cross(ray_direction, rotation_axis_direction)
         detector_direction_y = rotation_axis_direction
     
+        if "RightVector" in gVXR_params["Detector"]:
+            detector_direction_x = np.array(gVXR_params["Detector"]["RightVector"]);
+            detector_direction_x[2] *= -1
+
         print("distance:", distancePointLine(rotation_axis_position, [source_position_mm, detector_position_mm]))
         
         # Parallel beam
