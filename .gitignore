@@ -6,4 +6,8 @@ outcmaes/
 */simulation/
 */simulation.json
 */visible_light.json
+*/simulation.mha
+*/visible_light.mha
+*/geometry.png
+
 __pycache__/
