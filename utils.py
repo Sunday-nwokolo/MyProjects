@@ -107,6 +107,24 @@ def getReference(I_flat, angles_in_deg, number_of_angles):
 
     return np.array(images), np.array(angles), np.array(indices)
 
+def rescaleX(x):
+    temp = []
+
+    for i, min_bound, max_bound in zip(x, data_range[0], data_range[1]):
+        temp.append(min_bound + (max_bound - min_bound) * (i + 1) / 2)
+
+    return temp
+
+def inverseX(x):
+    temp = []
+
+    for i, min_bound, max_bound in zip(x, data_range[0], data_range[1]):
+        temp.append(-1 + 2 * (i - min_bound) / (max_bound - min_bound))
+
+    return temp
+
+
+
 def getXrayImage(x, take_screenshot=False):
 
     global screenshot, default_up_vector, default_right_vector
@@ -127,6 +145,7 @@ def getXrayImage(x, take_screenshot=False):
 #         label = gvxr.getChildLabel("root", i);
 #         gvxr.setLocalTransformationMatrix(label, identity_matrix)
 
+    x = rescaleX(x)
 
     # Move source, det, object using x
     x_src = x[0]
@@ -139,16 +158,16 @@ def getXrayImage(x, take_screenshot=False):
     z_det = x[5]
     gvxr.setDetectorPosition(x_det, y_det, z_det, "mm")
 
-    x_rot_axis_pos = x[6]
-    y_rot_axis_pos = x[7]
-    z_rot_axis_pos = x[8]
+    x_rot_axis_pos = 0
+    y_rot_axis_pos = 0
+    z_rot_axis_pos = 0
 
-    x_obj = x[9]
-    y_obj = x[10]
-    z_obj = x[11]
+    x_obj = x[6]
+    y_obj = x[7]
+    z_obj = 0
     
-    alpha_x = x[12]
-    alpha_y = x[13]
+    alpha_x = x[8]
+    alpha_y = x[9]
     # alpha_z = x[14]
 
 
@@ -157,9 +176,9 @@ def getXrayImage(x, take_screenshot=False):
     gvxr.setDetectorUpVector(*default_up_vector);
     gvxr.setDetectorRightVector(*default_right_vector);
 
-    if len(x) == 16:
-        gvxr.rotateDetector(x[14], *default_up_vector)
-        gvxr.rotateDetector(x[15], *default_right_vector)
+    if len(x) == 12:
+        gvxr.rotateDetector(x[10], *default_up_vector)
+        gvxr.rotateDetector(x[11], *default_right_vector)
         
     up_vector = gvxr.getDetectorUpVector();
         
@@ -211,6 +230,8 @@ def applyTransformation(x):
         0, 0, 0, 1
     ]
     
+    x = rescaleX(x)
+
     # Move source, det, object using x
     x_src = x[0]
     y_src = x[1]
@@ -222,24 +243,24 @@ def applyTransformation(x):
     z_det = x[5]
     gvxr.setDetectorPosition(x_det, y_det, z_det, "mm")
 
-    x_rot_axis_pos = x[6]
-    y_rot_axis_pos = x[7]
-    z_rot_axis_pos = x[8]
+    x_rot_axis_pos = 0
+    y_rot_axis_pos = 0
+    z_rot_axis_pos = 0
 
-    x_obj = x[9]
-    y_obj = x[10]
-    z_obj = x[11]
+    x_obj = x[6]
+    y_obj = x[7]
+    z_obj = 0
 
-    alpha_x = x[12]
-    alpha_y = x[13]
+    alpha_x = x[8]
+    alpha_y = x[9]
     # alpha_z = x[14]
 
     gvxr.setDetectorUpVector(*default_up_vector);
     gvxr.setDetectorRightVector(*default_right_vector);
 
-    if len(x) == 16:
-        gvxr.rotateDetector(x[14], *default_up_vector)
-        gvxr.rotateDetector(x[15], *default_right_vector)
+    if len(x) == 12:
+        gvxr.rotateDetector(x[10], *default_up_vector)
+        gvxr.rotateDetector(x[11], *default_right_vector)
         
     up_vector = gvxr.getDetectorUpVector();
 
