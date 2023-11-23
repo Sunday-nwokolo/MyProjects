@@ -6,6 +6,8 @@ import numpy as np
 import cv2
 import json 
 
+from skimage.metrics import structural_similarity as ssim
+
 import matplotlib.pyplot as plt
 # import cma
 # from PIL import Image
@@ -24,8 +26,9 @@ from gvxrPython3 import gvxr
 
 use_padding = True
 pad_width = 50
-
-
+bbox = None
+plot_directory = "."
+figsize=(15, 4)
 
 def average_images(image_paths):
     
@@ -104,9 +107,28 @@ def getReference(I_flat, angles_in_deg, number_of_angles):
 
     return np.array(images), np.array(angles), np.array(indices)
 
+def rescaleX(x):
+    temp = []
+
+    for i, min_bound, max_bound in zip(x, data_range[0], data_range[1]):
+        temp.append(min_bound + (max_bound - min_bound) * (i + 1) / 2)
+
+    return temp
+
+def inverseX(x):
+    temp = []
+
+    for i, min_bound, max_bound in zip(x, data_range[0], data_range[1]):
+        temp.append(-1 + 2 * (i - min_bound) / (max_bound - min_bound))
+
+    return temp
+
+
+
 def getXrayImage(x, take_screenshot=False):
 
-    global screenshot
+    global screenshot, default_up_vector, default_right_vector
+
     screenshot = []
 
     identity_matrix = [
@@ -123,6 +145,7 @@ def getXrayImage(x, take_screenshot=False):
 #         label = gvxr.getChildLabel("root", i);
 #         gvxr.setLocalTransformationMatrix(label, identity_matrix)
 
+    x = rescaleX(x)
 
     # Move source, det, object using x
     x_src = x[0]
@@ -135,39 +158,57 @@ def getXrayImage(x, take_screenshot=False):
     z_det = x[5]
     gvxr.setDetectorPosition(x_det, y_det, z_det, "mm")
 
-    x_rot_axis_pos = x[6]
-    y_rot_axis_pos = x[7]
-    z_rot_axis_pos = x[8]
+    x_rot_axis_pos = 0
+    y_rot_axis_pos = 0
+    z_rot_axis_pos = 0
 
-    alpha_x = x[9]
-    alpha_y = x[10]
-    alpha_z = x[11]
+    x_obj = x[6]
+    y_obj = x[7]
+    z_obj = 0
+    
+    alpha_x = x[8]
+    alpha_y = x[9]
+    # alpha_z = x[14]
 
-    x_obj = x[12]
-    y_obj = x[13]
-    z_obj = x[14]
 
     test_image = []
 
+    gvxr.setDetectorUpVector(*default_up_vector);
+    gvxr.setDetectorRightVector(*default_right_vector);
+
+    if len(x) == 12:
+        gvxr.rotateDetector(x[10], *default_up_vector)
+        gvxr.rotateDetector(x[11], *default_right_vector)
+        
     up_vector = gvxr.getDetectorUpVector();
-    
+        
     # Position the object on the turn table
     for i in range(gvxr.getNumberOfChildren("root")):
         label = gvxr.getChildLabel("root", i);
         gvxr.setLocalTransformationMatrix(label, identity_matrix)
         gvxr.translateNode(label, x_obj, y_obj, z_obj, "mm")  #4
+        
         gvxr.rotateNode(label, alpha_x, 1, 0, 0)  #3
         gvxr.rotateNode(label, alpha_y, 0, 1, 0)  #2
-        gvxr.rotateNode(label, alpha_z, 0, 0, 1)  #1
+        # gvxr.rotateNode(label, alpha_z, 0, 0, 1)  #1
     
+    
+    label = "root"
     for rot_angle in selected_angles:
     
         # Centre of rotation
         gvxr.setLocalTransformationMatrix("root", identity_matrix)
-        gvxr.translateNode("root", x_rot_axis_pos, y_rot_axis_pos, z_rot_axis_pos, "mm") #6
-        gvxr.rotateNode("root", rot_angle, up_vector[0], up_vector[1], up_vector[2]) #5
-                
+        
+        
+        gvxr.translateNode("root", -x_rot_axis_pos, -y_rot_axis_pos, -z_rot_axis_pos, "mm")
+        gvxr.rotateNode("root", rot_angle, *up_vector)
+        gvxr.translateNode("root", x_rot_axis_pos, y_rot_axis_pos, z_rot_axis_pos, "mm")
 
+      
+        bbox = gvxr.getNodeAndChildrenBoundingBox("Rabbit", "mm")
+    
+    
+        
         test_image.append(gvxr.computeXRayImage())
     
         if take_screenshot:
@@ -175,7 +216,71 @@ def getXrayImage(x, take_screenshot=False):
             gvxr.displayScene()        
             screenshot.append(gvxr.takeScreenshot())
     
-    return np.array(test_image, dtype=np.single) / gvxr.getTotalEnergyWithDetectorResponse()
+
+    return np.array(test_image, dtype=np.single) / gvxr.getTotalEnergyWithDetectorResponse(), bbox
+
+def applyTransformation(x):
+
+    global default_up_vector, default_right_vector
+    
+    identity_matrix = [
+        1, 0, 0, 0,
+        0, 1, 0, 0,
+        0, 0, 1, 0,
+        0, 0, 0, 1
+    ]
+    
+    x = rescaleX(x)
+
+    # Move source, det, object using x
+    x_src = x[0]
+    y_src = x[1]
+    z_src = x[2]
+    gvxr.setSourcePosition(x_src, y_src, z_src, "mm")
+
+    x_det = x[3]
+    y_det = x[4]
+    z_det = x[5]
+    gvxr.setDetectorPosition(x_det, y_det, z_det, "mm")
+
+    x_rot_axis_pos = 0
+    y_rot_axis_pos = 0
+    z_rot_axis_pos = 0
+
+    x_obj = x[6]
+    y_obj = x[7]
+    z_obj = 0
+
+    alpha_x = x[8]
+    alpha_y = x[9]
+    # alpha_z = x[14]
+
+    gvxr.setDetectorUpVector(*default_up_vector);
+    gvxr.setDetectorRightVector(*default_right_vector);
+
+    if len(x) == 12:
+        gvxr.rotateDetector(x[10], *default_up_vector)
+        gvxr.rotateDetector(x[11], *default_right_vector)
+        
+    up_vector = gvxr.getDetectorUpVector();
+
+    # Centre of rotation
+    gvxr.setLocalTransformationMatrix("root", identity_matrix)
+    gvxr.translateNode("root", x_rot_axis_pos, y_rot_axis_pos, z_rot_axis_pos, "mm") #6
+
+    bbox = gvxr.getNodeAndChildrenBoundingBox("Rabbit", "mm")
+       
+    # Position the object on the turn table
+    for i in range(gvxr.getNumberOfChildren("root")):
+        label = gvxr.getChildLabel("root", i);
+        gvxr.setLocalTransformationMatrix(label, identity_matrix)
+        gvxr.translateNode(label, x_obj, y_obj, z_obj, "mm")  #4
+        
+        gvxr.rotateNode(label, alpha_x, 1, 0, 0)  #3
+        gvxr.rotateNode(label, alpha_y, 0, 1, 0)  #2
+        # gvxr.rotateNode(label, alpha_z, 0, 0, 1)  #1
+        
+    return bbox
 
 def compareMAE(ref, test):
     return np.abs(ref - test).mean()
@@ -185,39 +290,92 @@ def compareMSE(ref, test):
 
 
 def fitnessMAE(x):
-    global ref_image, best_fitness, fitness_set, counter
+    global ref_image, best_fitness, fitness_set, counter, bbox
 
-    test_image = getXrayImage(x)
+    test_image, bbox = getXrayImage(x)
     fitness_value = compareMAE(ref_image, test_image)
 
     if best_fitness > fitness_value:
         fitness_set.append([counter, fitness_value])
         best_fitness = fitness_value
+        displayResult(x, figsize)
+        plt.savefig(plot_directory + "/plot_" + str(counter) + ".png")
+        plt.close()
 
     counter += 1
         
     return fitness_value
 
 def fitnessMSE(x):
-    global ref_image, best_fitness, fitness_set, counter
+    global ref_image, best_fitness, fitness_set, counter, bbox
 
-    test_image = getXrayImage(x)
+    test_image, bbox = getXrayImage(x)
     fitness_value = compareMSE(ref_image, test_image)
     
     if best_fitness > fitness_value:
         fitness_set.append([counter, fitness_value])
         best_fitness = fitness_value
+        displayResult(x, figsize)
+        plt.savefig(plot_directory + "/plot_" + str(counter) + ".png")
+        plt.close()
+
+    counter += 1
+
+    return fitness_value
+
+def fitnessSSIM(x):
+    global ref_image, best_fitness, fitness_set, counter, bbox
+
+    test_image, bbox = getXrayImage(x)
+    metrics = ssim(ref_image, test_image, data_range=1)
+    fitness_value = 1.0 / metrics
+    
+    if best_fitness > fitness_value:
+        fitness_set.append([counter, metrics])
+        best_fitness = fitness_value
+        displayResult(x, figsize)
+        plt.savefig(plot_directory + "/plot_" + str(counter) + ".png")
+        plt.close()
+
+    counter += 1
+
+    return fitness_value
+
+def ZNCC(img1, img2):
+    return np.mean(((img1 - img1.mean()) / img1.std()) * ((img2 - img2.mean()) / img2.std()))
+    
+def fitnessZNCC(x):
+    global ref_image, best_fitness, fitness_set, counter, bbox
+
+    test_image, bbox = getXrayImage(x)
+    metrics = ZNCC(ref_image, test_image)
+    fitness_value = 1.0 / metrics
+    
+    if best_fitness > fitness_value:
+        fitness_set.append([counter, metrics])
+        best_fitness = fitness_value
+        displayResult(x, figsize)
+        plt.savefig(plot_directory + "/plot_" + str(counter) + ".png")
+        plt.close()
 
     counter += 1
 
     return fitness_value
 
 def displayResult(x, figsize=(15, 4)):
-    global screenshot
-    test_image = getXrayImage(x, True)
+    global screenshot, bbox
+    test_image, bbox = getXrayImage(x, True)
     
     ref_tmp = np.copy(ref_image)
     test_tmp = np.copy(test_image)
+
+    MAE = compareMAE(ref_image, test_image);
+    RMSE = math.sqrt(compareMSE(ref_image, test_image));
+    SSIM = 0.0
+    
+    for img1, img2 in zip(ref_image, test_image):
+        SSIM += ssim(img1, img2, data_range=1);
+    SSIM /= ref_image.shape[0]
     
     ref_tmp -= ref_tmp.mean()
     ref_tmp /= ref_tmp.std()
@@ -229,7 +387,10 @@ def displayResult(x, figsize=(15, 4)):
     
     #fig, axs = plt.subplots(len(screenshot), 4, figsize=figsize)
     fig, axs = plt.subplots(len(screenshot), 4, figsize=figsize, squeeze=False)
-    plt.suptitle("Overall ZNCC=" + "{:.4f}".format(ZNCC) + "%")
+    plt.suptitle("Overall ZNCC=" + "{:.4f}".format(ZNCC) + "%\n" +
+                "Overall MAE=" + "{:.4f}".format(MAE) + "\n" +
+                "Overall RMSE=" + "{:.4f}".format(RMSE) + "\n" +
+                "Overall SSIM=" + "{:.4f}".format(SSIM))
 
     for index in range(len(screenshot)):
 #         axs[index][0].imshow(screenshot[index])
@@ -252,7 +413,6 @@ def displayResult(x, figsize=(15, 4)):
 #         ax.set_ylim([211, 470])
 #    plt.savefig('x_default.jpg', dpi=300, bbox_inches='tight')
 
-    plt.show()    
 
 def displayRef(ref_image):
 
@@ -264,3 +424,4 @@ def displayRef(ref_image):
         plt.imshow(ref_image[i], cmap="gray", vmin=0, vmax=1)
 
     plt.show()
+    

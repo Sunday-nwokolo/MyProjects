@@ -87,7 +87,7 @@ class JSON2gVXRDataReader:
         # Get the rotation parameters
         rotation_axis_direction = -np.array(gVXR_params["Detector"]["UpVector"])
         rotation_axis_direction[2] *= -1
-
+        
         if "CenterOfRotation" in gVXR_params["Scan"]:
             temp_rotation_axis_position = gVXR_params["Scan"]["CenterOfRotation"]
         elif "CentreOfRotation" in gVXR_params["Scan"]:
@@ -99,7 +99,7 @@ class JSON2gVXRDataReader:
             temp_rotation_axis_position = np.array(temp_rotation_axis_position[0:3]) * getUnitOfLength(temp_rotation_axis_position[3]) / getUnitOfLength("mm")
         temp_rotation_axis_position[2] *= -1
         # temp_rotation_axis_position += ???
-        temp_rotation_axis_position[1] = (181.75211882974276 +  36.786910286694045) / 2 - 15
+        # temp_rotation_axis_position[1] = (181.75211882974276 +  36.786910286694045) / 2 - 15
         rotation_axis_position = temp_rotation_axis_position #[0, 0, 0]
         
 
@@ -179,6 +179,10 @@ class JSON2gVXRDataReader:
         detector_direction_x = np.cross(ray_direction, rotation_axis_direction)
         detector_direction_y = rotation_axis_direction
     
+        if "RightVector" in gVXR_params["Detector"]:
+            detector_direction_x = np.array(gVXR_params["Detector"]["RightVector"]);
+            detector_direction_x[2] *= -1
+
         print("distance:", distancePointLine(rotation_axis_position, [source_position_mm, detector_position_mm]))
         
         # Parallel beam
@@ -198,8 +202,8 @@ class JSON2gVXRDataReader:
         else:
             acquisition_geometry = AcquisitionGeometry.create_Cone3D(source_position_mm,
                 detector_position_mm,
-                detector_direction_x=detector_direction_x,
-                detector_direction_y=detector_direction_y,
+                detector_direction_x=-detector_direction_x,
+                detector_direction_y=-detector_direction_y,
                 rotation_axis_position=rotation_axis_position,
                 rotation_axis_direction=rotation_axis_direction,
                 units="mm")

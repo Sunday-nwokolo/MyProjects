@@ -3,7 +3,7 @@
 
   "Detector": {
     "Position": [0.0, 0.0, 0.0, "mm"],
-    "UpVector": [0, -1, 0],
+    "UpVector": [0, 0, -1],
     "NumberOfPixels": [640, 480],
     "Spacing": [0.23, 0.23, "mm"]
   },
