@@ -30,7 +30,7 @@ bbox = None
 plot_directory = "."
 figsize=(15, 4)
 
-def average_images(image_paths):
+def average_images(image_paths, downsample=False):
     
     """Average a list of images."""
   
@@ -38,6 +38,10 @@ def average_images(image_paths):
     sample_image = cv2.imread(image_paths[0], cv2.IMREAD_GRAYSCALE)
     if sample_image is None:
         raise ValueError(f"Failed to load image: {image_paths[0]}")
+    
+    
+    if downsample:
+        sample_image = cv2.pyrDown(sample_image)
     
     avg_image = np.zeros_like(sample_image, dtype=float)
     
@@ -49,6 +53,9 @@ def average_images(image_paths):
         
         if image is None:
             raise ValueError(f"Failed to load image: {path}")
+
+        if downsample:
+            image = cv2.pyrDown(image)
 
         if use_padding:
             median_value = np.median(image)
@@ -171,7 +178,8 @@ def getXrayImage(x, take_screenshot=False):
     # alpha_z = x[14]
 
 
-    test_image = []
+    # test_image = np.zeros((len(selected_angles), gvxr.getDetectorNumberOfPixels()[1], gvxr.getDetectorNumberOfPixels()[0]), dtype=np.single)
+    test_image = np.zeros((len(selected_angles), gvxr.getDetectorNumberOfPixels()[1], gvxr.getDetectorNumberOfPixels()[0]), dtype=np.uint8)
 
     gvxr.setDetectorUpVector(*default_up_vector);
     gvxr.setDetectorRightVector(*default_right_vector);
@@ -194,7 +202,7 @@ def getXrayImage(x, take_screenshot=False):
     
     
     label = "root"
-    for rot_angle in selected_angles:
+    for i, rot_angle in enumerate(selected_angles):
     
         # Centre of rotation
         gvxr.setLocalTransformationMatrix("root", identity_matrix)
@@ -206,18 +214,23 @@ def getXrayImage(x, take_screenshot=False):
 
       
         bbox = gvxr.getNodeAndChildrenBoundingBox("Rabbit", "mm")
-    
-    
         
-        test_image.append(gvxr.computeXRayImage())
-    
+        xray_image = np.array(gvxr.computeXRayImage(), dtype=np.single) / gvxr.getTotalEnergyWithDetectorResponse()
+#         test_image[i] = xray_image
+
+#         ret, binary_image = cv2.threshold((255 * xray_image).astype(np.uint8), 127, 255, cv2.THRESH_OTSU)
+
+        test = xray_image > 0.99
+        test_image[i][test] = 255
+
         if take_screenshot:
 
             gvxr.displayScene()        
             screenshot.append(gvxr.takeScreenshot())
     
-
-    return np.array(test_image, dtype=np.single) / gvxr.getTotalEnergyWithDetectorResponse(), bbox
+    test_image = np.array(test_image, dtype=np.uint8)
+    
+    return test_image, bbox
 
 def applyTransformation(x):
 
@@ -282,11 +295,58 @@ def applyTransformation(x):
         
     return bbox
 
+
+hog = cv2.HOGDescriptor()
+
+def compareHOGwithMAE(ref, test):
+    hog_ref = hog.compute(ref)
+    hog_test = hog.compute(test)
+    
+    return compareMAE(hog_ref, hog_test)
+    
+def compareHOGwithMSE(ref, test):
+    
+    MSE = 0;
+    
+    for img_ref, img_test in zip(ref, test):
+        hog_ref = hog.compute(img_ref)
+        hog_test = hog.compute(img_test)
+        
+        MSE += compareMSE(hog_ref, hog_test)
+    
+    return MSE
+
+def compareHOGwithRMSE(ref, test):
+    return math.sqrt(compareHOGwithMSE(ref, test))
+
+def compareHOGwithZNCC(ref, test):
+    hog_ref = hog.compute(ref)
+    hog_test = hog.compute(test)
+    
+    return compareZNCC(hog_ref, hog_test)
+
 def compareMAE(ref, test):
     return np.abs(ref - test).mean()
 
 def compareMSE(ref, test):
     return np.square(ref - test).mean()
+
+def compareRMSE(ref, test):
+    return math.sqrt(compareMSE(ref, test))
+
+def compareZNCC(ref, test):
+    if ref.std() < 1e-4 or test.std() < 1e-4:
+        return 1e-4
+    
+    return np.mean(((ref - ref.mean()) / ref.std()) * ((test - test.mean()) / test.std()))
+
+def compareSSIM(ref, test):
+    
+    channel_axis = None
+    if len(ref.shape) == 3:
+        channel_axis = 0
+        
+    return ssim(ref, test, channel_axis=channel_axis, data_range=1)
 
 
 def fitnessMAE(x):
@@ -323,11 +383,50 @@ def fitnessMSE(x):
 
     return fitness_value
 
+def fitnessRMSE(x):
+    global ref_image, best_fitness, fitness_set, counter, bbox
+
+    test_image, bbox = getXrayImage(x)
+    fitness_value = compareRMSE(ref_image, test_image)
+    
+    if best_fitness > fitness_value:
+        fitness_set.append([counter, fitness_value])
+        best_fitness = fitness_value
+        displayResult(x, figsize)
+        plt.savefig(plot_directory + "/plot_" + str(counter) + ".png")
+        plt.close()
+
+    counter += 1
+
+    return fitness_value
+
 def fitnessSSIM(x):
     global ref_image, best_fitness, fitness_set, counter, bbox
 
     test_image, bbox = getXrayImage(x)
-    metrics = ssim(ref_image, test_image, data_range=1)
+    metrics = compareSSIM(ref_image, test_image)
+    fitness_value = 1.0 / metrics
+    
+    if best_fitness > fitness_value:
+        fitness_set.append([counter, metrics])
+        best_fitness = fitness_value
+        displayResult(x, figsize)
+        plt.savefig(plot_directory + "/plot_" + str(counter) + ".png")
+        plt.close()
+
+    counter += 1
+
+    return fitness_value
+    
+def fitnessZNCC(x):
+    global ref_image, best_fitness, fitness_set, counter, bbox
+
+    test_image, bbox = getXrayImage(x)
+    metrics = compareZNCC(ref_image, test_image)
+    
+    if metrics < 0.0:
+        metrics = 1e-6
+        
     fitness_value = 1.0 / metrics
     
     if best_fitness > fitness_value:
@@ -341,14 +440,66 @@ def fitnessSSIM(x):
 
     return fitness_value
 
-def ZNCC(img1, img2):
-    return np.mean(((img1 - img1.mean()) / img1.std()) * ((img2 - img2.mean()) / img2.std()))
-    
-def fitnessZNCC(x):
+def fitnessHOGwithMAE(x):
     global ref_image, best_fitness, fitness_set, counter, bbox
 
     test_image, bbox = getXrayImage(x)
-    metrics = ZNCC(ref_image, test_image)
+    fitness_value = compareHOGwithMAE(ref_image, test_image)
+
+    if best_fitness > fitness_value:
+        fitness_set.append([counter, fitness_value])
+        best_fitness = fitness_value
+        displayResult(x, figsize)
+        plt.savefig(plot_directory + "/plot_" + str(counter) + ".png")
+        plt.close()
+
+    counter += 1
+        
+    return fitness_value
+
+def fitnessHOGwithMSE(x):
+    global ref_image, best_fitness, fitness_set, counter, bbox
+
+    test_image, bbox = getXrayImage(x)
+    fitness_value = compareHOGwithMSE(ref_image, test_image)
+
+    if best_fitness > fitness_value:
+        fitness_set.append([counter, fitness_value])
+        best_fitness = fitness_value
+        displayResult(x, figsize)
+        plt.savefig(plot_directory + "/plot_" + str(counter) + ".png")
+        plt.close()
+
+    counter += 1
+        
+    return fitness_value
+
+def fitnessHOGwithRMSE(x):
+    global ref_image, best_fitness, fitness_set, counter, bbox
+
+    test_image, bbox = getXrayImage(x)
+    fitness_value = compareHOGwithRMSE(ref_image, test_image)
+
+    if best_fitness > fitness_value:
+        fitness_set.append([counter, fitness_value])
+        best_fitness = fitness_value
+        displayResult(x, figsize)
+        plt.savefig(plot_directory + "/plot_" + str(counter) + ".png")
+        plt.close()
+
+    counter += 1
+        
+    return fitness_value
+
+def fitnessHOGwithZNCC(x):
+    global ref_image, best_fitness, fitness_set, counter, bbox
+
+    test_image, bbox = getXrayImage(x)
+    metrics = compareHOGwithZNCC(ref_image, test_image)
+    
+    if metrics < 0.0:
+        metrics = 1e-6
+        
     fitness_value = 1.0 / metrics
     
     if best_fitness > fitness_value:
@@ -366,8 +517,8 @@ def displayResult(x, figsize=(15, 4)):
     global screenshot, bbox
     test_image, bbox = getXrayImage(x, True)
     
-    ref_tmp = np.copy(ref_image)
-    test_tmp = np.copy(test_image)
+    ref_tmp = np.array(ref_image, dtype=np.single)
+    test_tmp = np.array(test_image, dtype=np.single)
 
     MAE = compareMAE(ref_image, test_image);
     RMSE = math.sqrt(compareMSE(ref_image, test_image));
