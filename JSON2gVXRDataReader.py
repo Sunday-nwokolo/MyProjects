@@ -1,12 +1,33 @@
-import json # Load the JSON file
-import os
+# -*- coding: utf-8 -*-
+#  Copyright 2023 United Kingdom Research and Innovation
+#
+#  Licensed under the Apache License, Version 2.0 (the "License");
+#  you may not use this file except in compliance with the License.
+#  You may obtain a copy of the License at
+#
+#      http://www.apache.org/licenses/LICENSE-2.0
+#
+#  Unless required by applicable law or agreed to in writing, software
+#  distributed under the License is distributed on an "AS IS" BASIS,
+#  WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+#  See the License for the specific language governing permissions and
+#  limitations under the License.
+#
+# Authors:
+# CIL Developers, listed at: https://github.com/TomographicImaging/CIL/blob/master/NOTICE.txt
+# Franck P. Vidal (Science and Technology Facilities Council)
+
+
+from cil.framework import AcquisitionGeometry #, AcquisitionData, ImageData, ImageGeometry, DataOrder
+from cil.io.TIFF import TIFFStackReader
+
 import numpy as np
+import os
+from pathlib import Path
+import json # Load the JSON file
+from tifffile import imread
 
-from cil.io import TIFFStackReader
-from cil.framework import AcquisitionGeometry, AcquisitionData
 
-# from gvxrPython3 import gvxr
-# from gvxrPython3 import json2gvxr
 
 def distancePointLine(point, line) -> float:
 
@@ -56,71 +77,150 @@ def getUnitOfLength(aUnitOfLength: str) -> float:
 
     return unit_of_length;
 
-class JSON2gVXRDataReader:
 
-    def __init__(self, file_name):
+
+
+class JSON2gVXRDataReader(object):
+
+    '''
+    Create a reader for gVXR's JSON files
+    
+    Parameters
+    ----------
+    file_name: str
+        file name to read
+
+    normalise: bool, default=True
+        normalises loaded projections by detector white level (I_0)
+
+    fliplr: bool, default = False,
+        flip projections in the left-right direction (about vertical axis)
+    '''
+    
+    def __init__(self,
+                 file_name: str=None,
+                 normalise: bool=True,
+                 fliplr: bool=False):
+
+        # Initialise class attributes to None
+        self.file_name = None
+        self.normalise = normalise
+        self.fliplr = fliplr
+        self._ag = None # The acquisition geometry object
+        self.tiff_directory_path = None
+
+        # The file name is set
+        if file_name is not None:
+
+            # Initialise the instance
+            self.set_up(file_name=file_name, normalise=normalise, fliplr=fliplr)
+
+
+    def set_up(self,
+               file_name: str=None,
+               normalise: bool=True,
+               fliplr: bool=False):
+
+        '''Set up the reader
+        
+        Parameters
+        ----------
+        file_name: str
+            file name to read
+
+        normalise: bool, default=True
+            normalises loaded projections by detector white level (I_0)
+
+        fliplr: bool, default = False,
+            flip projections in the left-right direction (about vertical axis)
+        '''
+
+        # Save the attributes
         self.file_name = file_name
+        self.normalise = normalise
+        self.fliplr = fliplr
 
-    def read(self, verbose=0):
+        # Check a file name was provided
+        if file_name is None:
+            raise ValueError('Path to JSON file is required.')
+
+        # Check if the file exists
+        file_name = os.path.abspath(file_name)
+        if not(os.path.isfile(file_name)):
+            raise FileNotFoundError('{}'.format(file_name))
+
+        # Check the file name without the path
+        file_type = Path(file_name).suffix
+        if file_type.lower() != ".json":
+            raise TypeError('This reader can only process JSON files. Got {}'.format(file_type))
 
         # Load the JSON file
         with open(self.file_name) as f:
-            gVXR_params = json.load(f)
+            self.gVXR_params = json.load(f)
 
         # Get the absolute path of the JSON file
         cmd = os.path.abspath(self.file_name)
 
         # Get the path where the projections are
-        projection_path = gVXR_params["Scan"]["OutFolder"]
+        projection_path = self.gVXR_params["Scan"]["OutFolder"]
 
         # Is an absolute path?
         if projection_path[0] == "/":
-            TIFF_file_name = projection_path
+            self.tiff_directory_path = Path(projection_path)
 
         # It is a relative path
         else:
             # Get the absolute path of the JSON file
             file_abs_path = os.path.abspath(self.file_name)
             file_path = os.path.dirname(file_abs_path)
-            TIFF_file_name = file_path + "/" + projection_path
+            self.tiff_directory_path = Path(file_path + "/" + projection_path)
+            
+        # Look for projections
+        if not os.path.isdir(self.tiff_directory_path):
+            raise ValueError(f"The projection directory '{self.tiff_directory_path}' does not exist")
+
+        # Get the number of projections
+        number_of_projections = self.gVXR_params["Scan"]["NumberOfProjections"]
+
+        # Look for the name of projection images (use either one or two 'f' in .tiff)
+        image_file_names = [image for image in self.tiff_directory_path.rglob("*.tiff")]
+        if len(image_file_names) == 0:
+            image_file_names = [image for image in self.tiff_directory_path.rglob("*.tif")]
+
+        if len(image_file_names) != number_of_projections:
+            raise IOError("Expecting " + str(number_of_projections) + " TIFF files , " + str(len(image_file_names)) + " were found in " + str(self.tiff_directory_path))
 
         # Get the rotation parameters
-        rotation_axis_direction = -np.array(gVXR_params["Detector"]["UpVector"])
+        rotation_axis_direction = -np.array(self.gVXR_params["Detector"]["UpVector"])
         rotation_axis_direction[2] *= -1
         
-        if "CenterOfRotation" in gVXR_params["Scan"]:
-            temp_rotation_axis_position = gVXR_params["Scan"]["CenterOfRotation"]
-        elif "CentreOfRotation" in gVXR_params["Scan"]:
-            temp_rotation_axis_position = gVXR_params["Scan"]["CentreOfRotation"]
+        if "CenterOfRotation" in self.gVXR_params["Scan"]:
+            temp_rotation_axis_position = self.gVXR_params["Scan"]["CenterOfRotation"]
+        elif "CentreOfRotation" in self.gVXR_params["Scan"]:
+            temp_rotation_axis_position = self.gVXR_params["Scan"]["CentreOfRotation"]
         else:
             temp_rotation_axis_position = [0, 0, 0, "mm"]
 
         if len(temp_rotation_axis_position) == 4:
-            temp_rotation_axis_position = np.array(temp_rotation_axis_position[0:3]) * getUnitOfLength(temp_rotation_axis_position[3]) / getUnitOfLength("mm")
-        temp_rotation_axis_position[2] *= -1
-        # temp_rotation_axis_position += ???
-        # temp_rotation_axis_position[1] = (181.75211882974276 +  36.786910286694045) / 2 - 15
-        rotation_axis_position = temp_rotation_axis_position #[0, 0, 0]
+            rotation_axis_position = np.array(temp_rotation_axis_position[0:3]) * getUnitOfLength(temp_rotation_axis_position[3]) / getUnitOfLength("mm")
+        rotation_axis_position[2] *= -1
         
-
         # Get the source position in mm
-        temp = gVXR_params["Source"]["Position"]
+        temp = self.gVXR_params["Source"]["Position"]
         source_position_mm = np.array(temp[0:3]) * getUnitOfLength(temp[3]) / getUnitOfLength("mm")
         source_position_mm[2] *= -1
-        # source_position_mm -= temp_rotation_axis_position
 
         # Get the detector position in mm
-        temp = gVXR_params["Detector"]["Position"]
+        temp = self.gVXR_params["Detector"]["Position"]
         detector_position_mm = np.array(temp[0:3]) * getUnitOfLength(temp[3]) / getUnitOfLength("mm")
         detector_position_mm[2] *= -1
-        # detector_position_mm -= temp_rotation_axis_position
 
         # Compute the ray direction
         ray_direction = (detector_position_mm - source_position_mm)
         ray_direction /= np.linalg.norm(ray_direction)
 
         # Get the shape of the beam (parallel vs cone beam)
-        source_shape = gVXR_params["Source"]["Shape"]
+        source_shape = self.gVXR_params["Source"]["Shape"]
 
         # Is it a parallel beam
         use_parallel_beam = False
@@ -129,65 +229,48 @@ class JSON2gVXRDataReader:
                 use_parallel_beam = True
 
         # Get the pixel spacing in mm
-        detector_number_of_pixels = gVXR_params["Detector"]["NumberOfPixels"]
-        if "Spacing" in gVXR_params["Detector"].keys() == list and "Size" in gVXR_params["Detector"].keys():
+        detector_number_of_pixels = self.gVXR_params["Detector"]["NumberOfPixels"]
+        if "Spacing" in self.gVXR_params["Detector"].keys() == list and "Size" in self.gVXR_params["Detector"].keys():
             raise ValueError("Cannot use both 'Spacing' and 'Size' for the detector")
 
-        if "Spacing" in gVXR_params["Detector"].keys():
-            temp = gVXR_params["Detector"]["Spacing"]
+        if "Spacing" in self.gVXR_params["Detector"].keys():
+            temp = self.gVXR_params["Detector"]["Spacing"]
             pixel_spacing_mm = [
                 temp[0] * getUnitOfLength(temp[2]) / getUnitOfLength("mm"),
                 temp[1] * getUnitOfLength(temp[2]) / getUnitOfLength("mm")
              ]
-            if verbose > 0:
-                print("Pixel spacing:", pixel_spacing_mm, "mm")
 
-        elif "Size" in gVXR_params["Detector"].keys():
-            detector_size = gVXR_params["Detector"]["Size"];
+        elif "Size" in self.gVXR_params["Detector"].keys():
+            detector_size = self.gVXR_params["Detector"]["Size"];
             pixel_spacing_mm = [
                 (detector_size[0] / detector_number_of_pixels[0]) * getUnitOfLength(detector_size[2]) / getUnitOfLength("mm"),
                 (detector_size[0] / detector_number_of_pixels[0]) * getUnitOfLength(detector_size[2]) / getUnitOfLength("mm")
             ]
-            if verbose > 0:
-                print("Detecotr size:", detector_size, "mm")
         else:
             raise ValueError("'Spacing' and 'Size' were not defined for the detector, we cannot determined the pixel spacing")
 
         # Get the angles
         include_final_angle = False
-        if "IncludeFinalAngle" in gVXR_params["Scan"]:
-            include_final_angle = gVXR_params["Scan"]["IncludeFinalAngle"]
+        if "IncludeFinalAngle" in self.gVXR_params["Scan"]:
+            include_final_angle = self.gVXR_params["Scan"]["IncludeFinalAngle"]
 
         angle_set = np.linspace(
             0,
-            gVXR_params["Scan"]["FinalAngle"],
-            gVXR_params["Scan"]["NumberOfProjections"],
+            self.gVXR_params["Scan"]["FinalAngle"],
+            self.gVXR_params["Scan"]["NumberOfProjections"],
             include_final_angle
         )
-
-        # source_position_mm -= rotation_axis_position
-        # detector_position_mm -= rotation_axis_position
-        # rotation_axis_position = [0, 0, 0]
-        if verbose > 0:
-            print("Source position:", source_position_mm, "mm")
-            print("Detector position:", detector_position_mm, "mm")
-            print("Ray direction:", ray_direction)
-            print("Rotation axis:", rotation_axis_direction)
-            print("Rotation axis position:", rotation_axis_position, "mm")
-            print("Angles:", angle_set, "degrees")
 
         detector_direction_x = np.cross(ray_direction, rotation_axis_direction)
         detector_direction_y = rotation_axis_direction
     
-        if "RightVector" in gVXR_params["Detector"]:
-            detector_direction_x = np.array(gVXR_params["Detector"]["RightVector"]);
+        if "RightVector" in self.gVXR_params["Detector"]:
+            detector_direction_x = np.array(self.gVXR_params["Detector"]["RightVector"]);
             detector_direction_x[2] *= -1
 
-        print("distance:", distancePointLine(rotation_axis_position, [source_position_mm, detector_position_mm]))
-        
         # Parallel beam
         if use_parallel_beam:
-            acquisition_geometry = AcquisitionGeometry.create_Parallel3D(ray_direction,
+            self._ag = AcquisitionGeometry.create_Parallel3D(ray_direction,
                 detector_position_mm,
                 detector_direction_x=detector_direction_x,
                 detector_direction_y=detector_direction_y,
@@ -200,7 +283,7 @@ class JSON2gVXRDataReader:
             print(rotation_axis_direction)
         # It is cone beam
         else:
-            acquisition_geometry = AcquisitionGeometry.create_Cone3D(source_position_mm,
+            self._ag = AcquisitionGeometry.create_Cone3D(source_position_mm,
                 detector_position_mm,
                 detector_direction_x=-detector_direction_x,
                 detector_direction_y=-detector_direction_y,
@@ -208,29 +291,66 @@ class JSON2gVXRDataReader:
                 rotation_axis_direction=rotation_axis_direction,
                 units="mm")
 
-        acquisition_geometry.set_angles(angle_set)
-        acquisition_geometry.set_panel(detector_number_of_pixels, pixel_spacing_mm)
-        acquisition_geometry.set_labels(['angle','vertical','horizontal'])
-        print(detector_number_of_pixels)
-        print(pixel_spacing_mm)
+        # Set the angles of rotation
+        self._ag.set_angles(angle_set)
 
-        # Create the reader
-        TIFF_reader = TIFFStackReader(file_name=TIFF_file_name)
+        # Panel is width x height
+        self._ag.set_panel(detector_number_of_pixels, pixel_spacing_mm)
+        self._ag.set_labels(['angle','vertical','horizontal'])
 
-        # Load the image data
-        TIFF_data = TIFF_reader.read()
 
-        flat_field_correction = bool(gVXR_params["Scan"]["Flat-Field Correction"]) if "Flat-Field Correction" in gVXR_params["Scan"] else False
+    def read(self):
+        
+        '''
+        Reads projections and returns AcquisitionData with corresponding geometry,
+        arranged as ['angle', horizontal'] if a single slice is loaded
+        and ['vertical, 'angle', horizontal'] if more than 1 slice is loaded.
+        '''
 
-#         if flat_field_correction == False:
-#             k, f, target_unit = json2gvxr.getSpectrum(self.file_name, "MeV")
-#             total_energy_in_MeV = 0.0
-#             for energy, count in zip(k, f):
-#                 total_energy_in_MeV += energy * count
+        # Check a file name was provided
+        if self.tiff_directory_path is None:
+            raise ValueError('The reader was not set properly.')
 
-#             TIFF_data /= total_energy_in_MeV
+        # Create the TIFF reader
+        reader = TIFFStackReader()
 
-        data = AcquisitionData(TIFF_data, deep_copy=False, geometry=acquisition_geometry)
+        reader.set_up(file_name=self.tiff_directory_path)
 
-        return data
+        ad = reader.read_as_AcquisitionData(self._ag)
+
+        flat_field_correction_already_done = bool(self.gVXR_params["Scan"]["Flat-Field Correction"]) if "Flat-Field Correction" in self.gVXR_params["Scan"] else False
+
+        if (self.normalise and not flat_field_correction_already_done):
+            white_level = np.max(ad.array)
+            ad.array[ad.array < 1] = 1
+
+            # cast the data read to float32
+            ad = ad / np.float32(white_level)
+            
+        
+        if self.fliplr:
+            dim = ad.get_dimension_axis('horizontal')
+            ad.array = np.flip(ad.array, dim)
+        
+        return ad
+
+    def load_projections(self):
+        '''alias of read for backward compatibility'''
+        return self.read()
+
+
+    def get_geometry(self):
+        
+        '''
+        Return AcquisitionGeometry object
+        '''
+        
+        return self._ag
+
+    def get_geometry(self):
+        '''
+        Return the acquisition geometry object
+        '''
+        return self._ag
+
 
