@@ -25,5 +25,5 @@ dependencies:
     - opencv
     - k3d
     - natsort
-    - pip:
-        - gvxr>=2.0.8
+    # - pip:
+    #     - gvxr>=2.0.8

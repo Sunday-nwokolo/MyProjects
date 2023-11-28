@@ -42,6 +42,7 @@ def average_images(image_paths, downsample=False):
     
     if downsample:
         sample_image = cv2.pyrDown(sample_image)
+        sample_image = cv2.pyrDown(sample_image)
     
     avg_image = np.zeros_like(sample_image, dtype=float)
     
@@ -55,6 +56,7 @@ def average_images(image_paths, downsample=False):
             raise ValueError(f"Failed to load image: {path}")
 
         if downsample:
+            image = cv2.pyrDown(image)
             image = cv2.pyrDown(image)
 
         if use_padding:
@@ -106,7 +108,8 @@ def getReference(I_flat, angles_in_deg, number_of_angles):
         if number_of_angles == 1:
             index = 0
         else:
-            index = round((i + 1) / number_of_angles * (len(angles_in_deg) // 2))
+            # index = round((i + 1) / number_of_angles * (len(angles_in_deg) // 2))
+            index = round((i + 1) / number_of_angles * (len(angles_in_deg) - 1))
         
         images.append(I_flat[index])
         angles.append(angles_in_deg[index])
@@ -173,9 +176,13 @@ def getXrayImage(x, take_screenshot=False):
     y_obj = x[7]
     z_obj = 0
     
-    alpha_x = x[8]
-    alpha_y = x[9]
-    # alpha_z = x[14]
+    alpha_x = -90
+    alpha_y = 0
+    alpha_z = 0
+    if len(x) >= 10:
+        alpha_x = x[8]
+        alpha_y = x[9]
+        # alpha_z = x[14]
 
 
     # test_image = np.zeros((len(selected_angles), gvxr.getDetectorNumberOfPixels()[1], gvxr.getDetectorNumberOfPixels()[0]), dtype=np.single)
@@ -264,9 +271,13 @@ def applyTransformation(x):
     y_obj = x[7]
     z_obj = 0
 
-    alpha_x = x[8]
-    alpha_y = x[9]
-    # alpha_z = x[14]
+    alpha_x = -90
+    alpha_y = 0
+    alpha_z = 0
+    if len(x) >= 10:
+        alpha_x = x[8]
+        alpha_y = x[9]
+        # alpha_z = x[14]
 
     gvxr.setDetectorUpVector(*default_up_vector);
     gvxr.setDetectorRightVector(*default_right_vector);
