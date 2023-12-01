@@ -26,8 +26,7 @@
       "Label": "Rabbit",
       "Path": "Rabbit.stl",
       "Unit": "mm",
-      "Material": ["Compound", "C5O2H8"],
-      "Density": 1.18
+      "Material": ["Element", "C"]
     }
   ]
 }

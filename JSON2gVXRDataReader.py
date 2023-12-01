@@ -254,7 +254,7 @@ class JSON2gVXRDataReader(object):
         if "IncludeFinalAngle" in self.gVXR_params["Scan"]:
             include_final_angle = self.gVXR_params["Scan"]["IncludeFinalAngle"]
 
-        angle_set = np.linspace(
+        angle_set = -np.linspace(
             0,
             self.gVXR_params["Scan"]["FinalAngle"],
             self.gVXR_params["Scan"]["NumberOfProjections"],
@@ -285,14 +285,14 @@ class JSON2gVXRDataReader(object):
         else:
             self._ag = AcquisitionGeometry.create_Cone3D(source_position_mm,
                 detector_position_mm,
-                detector_direction_x=-detector_direction_x,
-                detector_direction_y=-detector_direction_y,
+                detector_direction_x=detector_direction_x,
+                detector_direction_y=detector_direction_y,
                 rotation_axis_position=rotation_axis_position,
                 rotation_axis_direction=rotation_axis_direction,
                 units="mm")
 
         # Set the angles of rotation
-        self._ag.set_angles(angle_set)
+        self._ag.set_angles(-angle_set)
 
         # Panel is width x height
         self._ag.set_panel(detector_number_of_pixels, pixel_spacing_mm)

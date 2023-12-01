@@ -29,6 +29,7 @@ pad_width = 50
 bbox = None
 plot_directory = "."
 figsize=(15, 4)
+x_best = None
 
 def average_images(image_paths, downsample=False):
     
@@ -138,7 +139,6 @@ def inverseX(x):
 def getXrayImage(x, take_screenshot=False):
 
     global screenshot, default_up_vector, default_right_vector
-
     screenshot = []
 
     identity_matrix = [
@@ -155,14 +155,19 @@ def getXrayImage(x, take_screenshot=False):
 #         label = gvxr.getChildLabel("root", i);
 #         gvxr.setLocalTransformationMatrix(label, identity_matrix)
 
-    x = rescaleX(x)
-
+    if len(x) == 2:
+        x_rot = rescaleX(x)
+        x = x_best
+    else:
+        x_rot = [0, 0]
+        x = rescaleX(x)
+        
     # Move source, det, object using x
     x_src = x[0]
     y_src = x[1]
     z_src = x[2]
     gvxr.setSourcePosition(x_src, y_src, z_src, "mm")
-    
+
     x_det = x[3]
     y_det = x[4]
     z_det = x[5]
@@ -175,15 +180,18 @@ def getXrayImage(x, take_screenshot=False):
     x_obj = x[6]
     y_obj = x[7]
     z_obj = 0
-    
+
     alpha_x = -90
     alpha_y = 0
     alpha_z = 0
+
     if len(x) >= 10:
         alpha_x = x[8]
         alpha_y = x[9]
         # alpha_z = x[14]
-
+    else:
+        alpha_x = x_rot[0]
+        alpha_y = x_rot[1]
 
     # test_image = np.zeros((len(selected_angles), gvxr.getDetectorNumberOfPixels()[1], gvxr.getDetectorNumberOfPixels()[0]), dtype=np.single)
     test_image = np.zeros((len(selected_angles), gvxr.getDetectorNumberOfPixels()[1], gvxr.getDetectorNumberOfPixels()[0]), dtype=np.uint8)
@@ -198,8 +206,11 @@ def getXrayImage(x, take_screenshot=False):
     up_vector = gvxr.getDetectorUpVector();
         
     # Position the object on the turn table
+    transformation_matrices = []
     for i in range(gvxr.getNumberOfChildren("root")):
         label = gvxr.getChildLabel("root", i);
+        transformation_matrices.append(gvxr.getLocalTransformationMatrix(label))
+
         gvxr.setLocalTransformationMatrix(label, identity_matrix)
         gvxr.translateNode(label, x_obj, y_obj, z_obj, "mm")  #4
         
@@ -235,6 +246,10 @@ def getXrayImage(x, take_screenshot=False):
             gvxr.displayScene()        
             screenshot.append(gvxr.takeScreenshot())
     
+    for i, matrix in zip(range(gvxr.getNumberOfChildren("root")), transformation_matrices):
+        label = gvxr.getChildLabel("root", i);
+        gvxr.setLocalTransformationMatrix(label, matrix)
+
     test_image = np.array(test_image, dtype=np.uint8)
     
     return test_image, bbox
@@ -250,7 +265,12 @@ def applyTransformation(x):
         0, 0, 0, 1
     ]
     
-    x = rescaleX(x)
+    if len(x) == 2:
+        x_rot = rescaleX(x)
+        x = x_best
+    else:
+        x_rot = [0, 0]
+        x = rescaleX(x)
 
     # Move source, det, object using x
     x_src = x[0]
@@ -274,10 +294,14 @@ def applyTransformation(x):
     alpha_x = -90
     alpha_y = 0
     alpha_z = 0
+
     if len(x) >= 10:
         alpha_x = x[8]
         alpha_y = x[9]
         # alpha_z = x[14]
+    else:
+        alpha_x = x_rot[0]
+        alpha_y = x_rot[1]
 
     gvxr.setDetectorUpVector(*default_up_vector);
     gvxr.setDetectorRightVector(*default_right_vector);
